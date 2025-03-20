@@ -16,16 +16,8 @@ on:
           - "Option2"
           - "Option3"
       manual_templates:
-        description: "Select additional template files (comma-separated)"
+        description: "Enter additional template files manually (comma-separated, e.g., ref2.txt,ref3.txt)"
         required: false
-        type: choice
-        options:
-          - ""
-          - "ref1.txt"
-          - "ref2.txt"
-          - "ref3.txt"
-          - "ref4.txt"
-          - "ref5.txt"
 
 permissions:
   contents: write
@@ -38,10 +30,21 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v3
 
+      - name: Load Available Templates
+        id: load_templates
+        run: |
+          if [[ -f ref_list.txt ]]; then
+            AVAILABLE_FILES=$(paste -sd, ref_list.txt)
+            echo "Available template files: $AVAILABLE_FILES"
+            echo "available_files=$AVAILABLE_FILES" >> $GITHUB_ENV
+          else
+            echo "Error: ref_list.txt not found!"
+            exit 1
+          fi
+
       - name: Determine Selected Templates
         id: select_templates
         run: |
-          # Set predefined templates
           SELECTED_FILES=""
           case "${{ github.event.inputs.predefined_option }}" in
             "Option1")
@@ -55,7 +58,7 @@ jobs:
               ;;
           esac
           
-          # Add manually selected templates
+          # Add manual templates if provided
           if [[ -n "${{ github.event.inputs.manual_templates }}" ]]; then
             if [[ -n "$SELECTED_FILES" ]]; then
               SELECTED_FILES="$SELECTED_FILES,${{ github.event.inputs.manual_templates }}"
