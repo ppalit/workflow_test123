@@ -44,30 +44,38 @@ jobs:
       - name: Define Variables
         id: define_vars
         run: |
-          APP_PATH="${{ github.event.inputs.app_name }}/${{ github.event.inputs.environment }}"
-          BRANCH_NAME="users/${{ env.username }}/${{ github.event.inputs.app_name }}-${{ github.event.inputs.environment }}"
-          
+          APP_NAME="${{ github.event.inputs.app_name }}"
+          ENVIRONMENT="${{ github.event.inputs.environment }}"
+          APP_PATH="${APP_NAME}/${ENVIRONMENT}"
+          BRANCH_NAME="users/${{ env.username }}/${APP_NAME}-${ENVIRONMENT}"
+
+          echo "App Name: $APP_NAME"
+          echo "Environment: $ENVIRONMENT"
           echo "App Path: $APP_PATH"
           echo "Branch Name: $BRANCH_NAME"
 
+          echo "app_name=$APP_NAME" >> $GITHUB_ENV
+          echo "environment=$ENVIRONMENT" >> $GITHUB_ENV
           echo "app_path=$APP_PATH" >> $GITHUB_ENV
           echo "branch_name=$BRANCH_NAME" >> $GITHUB_ENV
 
-      - name: Check if App Already Exists
+      - name: Check if App Exists in Any Environment
         id: check_app
         run: |
-          if [ -d "${{ env.app_path }}" ]; then
-            echo "App already exists at ${{ env.app_path }}. Skipping creation."
-            echo "app_exists=true" >> $GITHUB_ENV
-          else
-            echo "App does not exist. Proceeding with creation."
-            echo "app_exists=false" >> $GITHUB_ENV
-          fi
+          for env in dev qa prod; do
+            if [ -d "${{ env.app_name }}/$env" ]; then
+              echo "🚫 The app '${{ env.app_name }}' already exists in the '$env' environment!"
+              echo "app_exists=true" >> $GITHUB_ENV
+              exit 0
+            fi
+          done
+          echo "✅ The app does not exist in any environment. Proceeding with creation."
+          echo "app_exists=false" >> $GITHUB_ENV
 
       - name: Stop if App Already Exists
         if: env.app_exists == 'true'
         run: |
-          echo "🚫 The app folder '${{ env.app_path }}' already exists! No changes will be made."
+          echo "🚫 The app '${{ env.app_name }}' already exists in another environment. No changes will be made."
           exit 0
 
       - name: Determine Selected Templates
@@ -103,13 +111,19 @@ jobs:
         run: |
           mkdir -p "${{ env.app_path }}"
           IFS=',' read -ra FILES <<< "$files"
+          COPIED_FILES=""
           for file in "${FILES[@]}"; do
             if [[ -f "example/$file" ]]; then
               cp "example/$file" "${{ env.app_path }}/"
+              COPIED_FILES+="$file\n"
             else
               echo "Warning: example/$file does not exist."
             fi
           done
+          
+          echo "Copied Files:"
+          echo -e "$COPIED_FILES"
+          echo "copied_files=$COPIED_FILES" >> $GITHUB_ENV
 
       - name: Commit and Push Changes
         if: env.app_exists == 'false'
@@ -122,9 +136,12 @@ jobs:
           git commit -m "Created folder ${{ env.app_path }} with selected templates" || echo "No changes to commit"
           git push origin "${{ env.branch_name }}"
 
-      - name: Provide PR Link
+      - name: Provide PR Link and File Summary
         if: env.app_exists == 'false'
         run: |
           echo "## 🎉 New Branch Created!" >> $GITHUB_STEP_SUMMARY
           echo "Branch: ${{ env.branch_name }}" >> $GITHUB_STEP_SUMMARY
           echo "[Create a Pull Request](https://github.com/${{ github.repository }}/compare/main...${{ env.branch_name }})" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📂 Files Created in '${{ env.app_path }}':" >> $GITHUB_STEP_SUMMARY
+          echo "```\n${{ env.copied_files }}```" >> $GITHUB_STEP_SUMMARY
