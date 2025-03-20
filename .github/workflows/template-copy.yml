@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       app_name:
-        description: "Enter the name of your app (e.g., app1, app2)"
+        description: "Enter the name of your app"
         required: true
       environment:
         description: "Select an environment"
@@ -23,7 +23,7 @@ on:
           - "Option2"
           - "Option3"
       manual_templates:
-        description: "Enter additional template files manually (comma-separated, e.g., ref2.txt,ref3.txt)"
+        description: "Enter additional template files (comma-separated, e.g., ref2.txt,ref3.txt)"
         required: false
 
 permissions:
@@ -49,11 +49,6 @@ jobs:
           APP_PATH="${APP_NAME}/${ENVIRONMENT}"
           BRANCH_NAME="users/${{ env.username }}/${APP_NAME}-${ENVIRONMENT}"
 
-          echo "App Name: $APP_NAME"
-          echo "Environment: $ENVIRONMENT"
-          echo "App Path: $APP_PATH"
-          echo "Branch Name: $BRANCH_NAME"
-
           echo "app_name=$APP_NAME" >> $GITHUB_ENV
           echo "environment=$ENVIRONMENT" >> $GITHUB_ENV
           echo "app_path=$APP_PATH" >> $GITHUB_ENV
@@ -63,7 +58,7 @@ jobs:
         id: check_app
         run: |
           for env in dev qa prod; do
-            if [ -d "${{ env.app_name }}/$env" ]; then
+            if [ -d "${{ github.workspace }}/${{ env.app_name }}/$env" ]; then
               echo "🚫 The app '${{ env.app_name }}' already exists in the '$env' environment!"
               echo "app_exists=true" >> $GITHUB_ENV
               exit 0
@@ -98,7 +93,6 @@ jobs:
             SELECTED_FILES="$SELECTED_FILES,${{ github.event.inputs.manual_templates }}"
           fi
 
-          echo "Final selected files: $SELECTED_FILES"
           echo "files=$SELECTED_FILES" >> $GITHUB_ENV
 
       - name: Create New Branch
@@ -112,17 +106,24 @@ jobs:
           mkdir -p "${{ env.app_path }}"
           IFS=',' read -ra FILES <<< "$files"
           COPIED_FILES=""
+          OUTPUT_FILE="copied_files.txt"
+
+          # Clear output file before writing
+          > $OUTPUT_FILE
+
           for file in "${FILES[@]}"; do
             if [[ -f "example/$file" ]]; then
               cp "example/$file" "${{ env.app_path }}/"
-              COPIED_FILES+="$file\n"
+              echo "$file" >> $OUTPUT_FILE
             else
               echo "Warning: example/$file does not exist."
             fi
           done
-          
-          echo "Copied Files:"
-          echo -e "$COPIED_FILES"
+
+      - name: Read Copied Files List
+        if: env.app_exists == 'false'
+        run: |
+          COPIED_FILES=$(cat copied_files.txt || echo "No files copied")
           echo "copied_files=$COPIED_FILES" >> $GITHUB_ENV
 
       - name: Commit and Push Changes
@@ -144,4 +145,4 @@ jobs:
           echo "[Create a Pull Request](https://github.com/${{ github.repository }}/compare/main...${{ env.branch_name }})" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### 📂 Files Created in '${{ env.app_path }}':" >> $GITHUB_STEP_SUMMARY
-          echo "```\n${{ env.copied_files }}```" >> $GITHUB_STEP_SUMMARY
+          echo "```\n$(cat copied_files.txt)```" >> $GITHUB_STEP_SUMMARY
