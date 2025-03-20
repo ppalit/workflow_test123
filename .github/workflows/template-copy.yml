@@ -73,27 +73,24 @@ jobs:
           echo "🚫 The app '${{ env.app_name }}' already exists in another environment. No changes will be made."
           exit 0
 
-      - name: Determine Selected Templates
+      - name: Determine Selected Templates (Remove Duplicates)
         if: env.app_exists == 'false'
         run: |
           case "${{ github.event.inputs.predefined_option }}" in
-            "Option1")
-              SELECTED_FILES="ref1.txt,ref5.txt"
-              ;;
-            "Option2")
-              SELECTED_FILES="ref2.txt,ref3.txt"
-              ;;
-            "Option3")
-              SELECTED_FILES="ref4.txt"
-              ;;
+            "Option1") PRESET_FILES="ref1.txt ref5.txt" ;;
+            "Option2") PRESET_FILES="ref2.txt ref3.txt" ;;
+            "Option3") PRESET_FILES="ref4.txt" ;;
           esac
-          
-          # Add manual templates if provided
-          if [[ -n "${{ github.event.inputs.manual_templates }}" ]]; then
-            SELECTED_FILES="$SELECTED_FILES,${{ github.event.inputs.manual_templates }}"
-          fi
 
-          echo "files=$SELECTED_FILES" >> $GITHUB_ENV
+          # Add manual templates if provided
+          MANUAL_FILES="${{ github.event.inputs.manual_templates }}"
+          FINAL_LIST="$PRESET_FILES $MANUAL_FILES"
+
+          # Remove duplicates and format as comma-separated
+          UNIQUE_FILES=$(echo $FINAL_LIST | tr ' ' '\n' | sort -u | tr '\n' ',' | sed 's/,$//')
+
+          echo "files=$UNIQUE_FILES" >> $GITHUB_ENV
+          echo "Final selected files: $UNIQUE_FILES"
 
       - name: Create New Branch
         if: env.app_exists == 'false'
@@ -108,8 +105,7 @@ jobs:
           COPIED_FILES=""
           OUTPUT_FILE="copied_files.txt"
 
-          # Clear output file before writing
-          > $OUTPUT_FILE
+          > $OUTPUT_FILE  # Clear output file
 
           for file in "${FILES[@]}"; do
             if [[ -f "example/$file" ]]; then
