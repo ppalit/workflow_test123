@@ -1,0 +1,35 @@
+{
+    "data": [
+      {
+        "Resource": "keyvault",
+        "filename": "keyvault.tf",
+        "arch": ["alacarte", "datalanding", "webapp"]
+      },
+      {
+        "Resource": "sql",
+        "filename": "sql_server.tf",
+        "arch": ["alacarte", "datalanding"]
+      },
+      {
+        "Resource": "terraform_var",
+        "filename": "variable.tf",
+        "arch": ["terraform"]
+      },
+      {
+        "Resource": "terraform_data",
+        "filename": "main.tf",
+        "arch": ["terraform"]
+      },
+      {
+        "Resource": "storage",
+        "filename": "storage_account.tf",
+        "arch": ["alacarte", "datalanding", "webapp"]
+      },
+      {
+        "Resource": "eventhub",
+        "filename": "eventhub.tf",
+        "arch": ["alacarte"]
+      }
+    ]
+  }
+  
