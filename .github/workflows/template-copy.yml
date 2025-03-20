@@ -7,11 +7,10 @@ on:
         description: "Enter the name of your app (e.g., app1, app2)"
         required: true
       predefined_option:
-        description: "Select a predefined option (or leave empty for manual selection)"
-        required: false
+        description: "Select a predefined option"
+        required: true
         type: choice
         options:
-          - ""
           - "Option1"
           - "Option2"
           - "Option3"
@@ -30,22 +29,9 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v3
 
-      - name: Load Available Templates
-        id: load_templates
-        run: |
-          if [[ -f ref_list.txt ]]; then
-            AVAILABLE_FILES=$(paste -sd, ref_list.txt)
-            echo "Available template files: $AVAILABLE_FILES"
-            echo "available_files=$AVAILABLE_FILES" >> $GITHUB_ENV
-          else
-            echo "Error: ref_list.txt not found!"
-            exit 1
-          fi
-
       - name: Determine Selected Templates
         id: select_templates
         run: |
-          SELECTED_FILES=""
           case "${{ github.event.inputs.predefined_option }}" in
             "Option1")
               SELECTED_FILES="ref1.txt,ref5.txt"
@@ -60,11 +46,7 @@ jobs:
           
           # Add manual templates if provided
           if [[ -n "${{ github.event.inputs.manual_templates }}" ]]; then
-            if [[ -n "$SELECTED_FILES" ]]; then
-              SELECTED_FILES="$SELECTED_FILES,${{ github.event.inputs.manual_templates }}"
-            else
-              SELECTED_FILES="${{ github.event.inputs.manual_templates }}"
-            fi
+            SELECTED_FILES="$SELECTED_FILES,${{ github.event.inputs.manual_templates }}"
           fi
 
           echo "Final selected files: $SELECTED_FILES"
