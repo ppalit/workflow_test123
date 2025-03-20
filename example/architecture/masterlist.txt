@@ -1,0 +1,7 @@
+Resource,filename,arch
+keyvault,keyvault.tf,alacarte|datalanding|webapp
+sql,sql_server.tf,alacarte|datalanding
+terraform_var,variable.tf,terraform
+terraform_data,main.tf,terraform
+storage,storage_account.tf,alacarte|datalanding|webapp
+eventhub,eventhub.tf,alacarte
