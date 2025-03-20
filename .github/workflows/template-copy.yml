@@ -29,6 +29,10 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v3
 
+      - name: Get GitHub Username
+        id: get_username
+        run: echo "username=${{ github.actor }}" >> $GITHUB_ENV
+
       - name: Determine Selected Templates
         id: select_templates
         run: |
@@ -52,6 +56,12 @@ jobs:
           echo "Final selected files: $SELECTED_FILES"
           echo "files=$SELECTED_FILES" >> $GITHUB_ENV
 
+      - name: Create New Branch
+        run: |
+          BRANCH_NAME="users/${{ env.username }}/${{ github.event.inputs.app_name }}"
+          echo "Branch Name: $BRANCH_NAME"
+          git checkout -b "$BRANCH_NAME"
+
       - name: Create App Folder and Copy Files
         run: |
           mkdir -p "${{ github.event.inputs.app_name }}"
@@ -72,4 +82,13 @@ jobs:
           git config --global user.email "github-actions@github.com"
           git add .
           git commit -m "Created folder ${{ github.event.inputs.app_name }} with selected templates" || echo "No changes to commit"
-          git push origin HEAD:main
+          git push origin "users/${{ env.username }}/${{ github.event.inputs.app_name }}"
+
+      - name: Output Branch Info
+        run: echo "Branch users/${{ env.username }}/${{ github.event.inputs.app_name }} has been created!"
+
+      - name: Provide PR Link
+        run: |
+          echo "## 🎉 New Branch Created!" >> $GITHUB_STEP_SUMMARY
+          echo "Branch: users/${{ env.username }}/${{ github.event.inputs.app_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "[Create a Pull Request](https://github.com/${{ github.repository }}/compare/main...users/${{ env.username }}/${{ github.event.inputs.app_name }})" >> $GITHUB_STEP_SUMMARY
