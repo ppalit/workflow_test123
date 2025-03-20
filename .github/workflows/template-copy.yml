@@ -6,6 +6,14 @@ on:
       app_name:
         description: "Enter the name of your app (e.g., app1, app2)"
         required: true
+      environment:
+        description: "Select an environment"
+        required: true
+        type: choice
+        options:
+          - "dev"
+          - "qa"
+          - "prod"
       predefined_option:
         description: "Select a predefined option"
         required: true
@@ -33,8 +41,37 @@ jobs:
         id: get_username
         run: echo "username=${{ github.actor }}" >> $GITHUB_ENV
 
+      - name: Define Variables
+        id: define_vars
+        run: |
+          APP_PATH="${{ github.event.inputs.app_name }}/${{ github.event.inputs.environment }}"
+          BRANCH_NAME="users/${{ env.username }}/${{ github.event.inputs.app_name }}-${{ github.event.inputs.environment }}"
+          
+          echo "App Path: $APP_PATH"
+          echo "Branch Name: $BRANCH_NAME"
+
+          echo "app_path=$APP_PATH" >> $GITHUB_ENV
+          echo "branch_name=$BRANCH_NAME" >> $GITHUB_ENV
+
+      - name: Check if App Already Exists
+        id: check_app
+        run: |
+          if [ -d "${{ env.app_path }}" ]; then
+            echo "App already exists at ${{ env.app_path }}. Skipping creation."
+            echo "app_exists=true" >> $GITHUB_ENV
+          else
+            echo "App does not exist. Proceeding with creation."
+            echo "app_exists=false" >> $GITHUB_ENV
+          fi
+
+      - name: Stop if App Already Exists
+        if: env.app_exists == 'true'
+        run: |
+          echo "🚫 The app folder '${{ env.app_path }}' already exists! No changes will be made."
+          exit 0
+
       - name: Determine Selected Templates
-        id: select_templates
+        if: env.app_exists == 'false'
         run: |
           case "${{ github.event.inputs.predefined_option }}" in
             "Option1")
@@ -57,38 +94,37 @@ jobs:
           echo "files=$SELECTED_FILES" >> $GITHUB_ENV
 
       - name: Create New Branch
+        if: env.app_exists == 'false'
         run: |
-          BRANCH_NAME="users/${{ env.username }}/${{ github.event.inputs.app_name }}"
-          echo "Branch Name: $BRANCH_NAME"
-          git checkout -b "$BRANCH_NAME"
+          git checkout -b "${{ env.branch_name }}"
 
       - name: Create App Folder and Copy Files
+        if: env.app_exists == 'false'
         run: |
-          mkdir -p "${{ github.event.inputs.app_name }}"
+          mkdir -p "${{ env.app_path }}"
           IFS=',' read -ra FILES <<< "$files"
           for file in "${FILES[@]}"; do
             if [[ -f "example/$file" ]]; then
-              cp "example/$file" "${{ github.event.inputs.app_name }}/"
+              cp "example/$file" "${{ env.app_path }}/"
             else
               echo "Warning: example/$file does not exist."
             fi
           done
 
       - name: Commit and Push Changes
+        if: env.app_exists == 'false'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions@github.com"
           git add .
-          git commit -m "Created folder ${{ github.event.inputs.app_name }} with selected templates" || echo "No changes to commit"
-          git push origin "users/${{ env.username }}/${{ github.event.inputs.app_name }}"
-
-      - name: Output Branch Info
-        run: echo "Branch users/${{ env.username }}/${{ github.event.inputs.app_name }} has been created!"
+          git commit -m "Created folder ${{ env.app_path }} with selected templates" || echo "No changes to commit"
+          git push origin "${{ env.branch_name }}"
 
       - name: Provide PR Link
+        if: env.app_exists == 'false'
         run: |
           echo "## 🎉 New Branch Created!" >> $GITHUB_STEP_SUMMARY
-          echo "Branch: users/${{ env.username }}/${{ github.event.inputs.app_name }}" >> $GITHUB_STEP_SUMMARY
-          echo "[Create a Pull Request](https://github.com/${{ github.repository }}/compare/main...users/${{ env.username }}/${{ github.event.inputs.app_name }})" >> $GITHUB_STEP_SUMMARY
+          echo "Branch: ${{ env.branch_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "[Create a Pull Request](https://github.com/${{ github.repository }}/compare/main...${{ env.branch_name }})" >> $GITHUB_STEP_SUMMARY
