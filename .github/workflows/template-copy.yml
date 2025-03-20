@@ -84,10 +84,9 @@ jobs:
 
           # Add manual templates if provided
           MANUAL_FILES="${{ github.event.inputs.manual_templates }}"
-          FINAL_LIST="$PRESET_FILES $MANUAL_FILES"
 
-          # Remove duplicates and format as comma-separated
-          UNIQUE_FILES=$(echo $FINAL_LIST | tr ' ' '\n' | sort -u | tr '\n' ',' | sed 's/,$//')
+          # Merge and remove duplicates
+          UNIQUE_FILES=$(echo -e "$PRESET_FILES\n$MANUAL_FILES" | tr ',' '\n' | sort -u | grep -v '^$' | tr '\n' ',' | sed 's/,$//')
 
           echo "files=$UNIQUE_FILES" >> $GITHUB_ENV
           echo "Final selected files: $UNIQUE_FILES"
@@ -102,17 +101,16 @@ jobs:
         run: |
           mkdir -p "${{ env.app_path }}"
           IFS=',' read -ra FILES <<< "$files"
-          COPIED_FILES=""
           OUTPUT_FILE="copied_files.txt"
-
           > $OUTPUT_FILE  # Clear output file
 
           for file in "${FILES[@]}"; do
-            if [[ -f "example/$file" ]]; then
-              cp "example/$file" "${{ env.app_path }}/"
+            FILE_PATH="example/$file"
+            if [[ -f "$FILE_PATH" ]]; then
+              cp "$FILE_PATH" "${{ env.app_path }}/"
               echo "$file" >> $OUTPUT_FILE
             else
-              echo "Warning: example/$file does not exist."
+              echo "⚠️ Warning: $FILE_PATH does not exist, skipping."
             fi
           done
 
