@@ -1,4 +1,4 @@
-name: Create App Folder from Templates
+name: Terraform Templates
 
 on:
   workflow_dispatch:
