@@ -16,11 +16,19 @@ on:
           - "Option2"
           - "Option3"
       manual_templates:
-        description: "Enter template files manually (comma-separated, e.g., ref1.txt,ref5.txt) if not using a predefined option"
+        description: "Select additional template files (comma-separated)"
         required: false
+        type: choice
+        options:
+          - ""
+          - "ref1.txt"
+          - "ref2.txt"
+          - "ref3.txt"
+          - "ref4.txt"
+          - "ref5.txt"
 
-permissions: 
-  contents: write  # ✅ Grants permission to push changes
+permissions:
+  contents: write
 
 jobs:
   create-folder:
@@ -33,6 +41,8 @@ jobs:
       - name: Determine Selected Templates
         id: select_templates
         run: |
+          # Set predefined templates
+          SELECTED_FILES=""
           case "${{ github.event.inputs.predefined_option }}" in
             "Option1")
               SELECTED_FILES="ref1.txt,ref5.txt"
@@ -43,12 +53,18 @@ jobs:
             "Option3")
               SELECTED_FILES="ref4.txt"
               ;;
-            *)
-              SELECTED_FILES="${{ github.event.inputs.manual_templates }}"
-              ;;
           esac
           
-          echo "Selected files: $SELECTED_FILES"
+          # Add manually selected templates
+          if [[ -n "${{ github.event.inputs.manual_templates }}" ]]; then
+            if [[ -n "$SELECTED_FILES" ]]; then
+              SELECTED_FILES="$SELECTED_FILES,${{ github.event.inputs.manual_templates }}"
+            else
+              SELECTED_FILES="${{ github.event.inputs.manual_templates }}"
+            fi
+          fi
+
+          echo "Final selected files: $SELECTED_FILES"
           echo "files=$SELECTED_FILES" >> $GITHUB_ENV
 
       - name: Create App Folder and Copy Files
