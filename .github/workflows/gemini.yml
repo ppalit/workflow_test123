@@ -20,23 +20,15 @@ on:
           - datalanding
           - webapp
           - blank
-      resource_alacarte:
-        description: 'Select alacarte resources (optional)'
-        type: choice
-        options:
-          - keyvault
-          - sql
-          - storage
-          - eventhub
-        required: false
-        multiple: true
+
+
 
 permissions:
   contents: write
 
 jobs:
   create_env_folder:
-    runs-on: ubuntu-latest
+    runs_on: ubuntu-latest
 
     steps:
     - name: Checkout repository
@@ -51,7 +43,6 @@ jobs:
         echo "EXAMPLE_DIR=${{ github.workspace }}/example" >> $GITHUB_OUTPUT
         echo "ARCHITECTURE=${{ github.event.inputs.architecture }}" >> $GITHUB_OUTPUT
         echo "APP_BASE_DIR=${{ github.workspace }}/${{ github.event.inputs.app_name }}" >> $GITHUB_OUTPUT
-        echo "ALACARTE_RESOURCES=${{ toJson(github.event.inputs.resource_alacarte) }}" >> $GITHUB_OUTPUT
 
     - name: Check if app directory exists and exit if it does
       id: check_app_dir
@@ -65,39 +56,19 @@ jobs:
       run: |
         mkdir -p ${{ steps.vars.outputs.APP_DIR }}
 
-    - name: Copy files based on architecture and alacarte resources
+    - name: Copy files based on architecture
       run: |
         ARCH_FILE="${{ steps.vars.outputs.REF_ARCH_FILE }}"
         RESOURCES_FILE="${{ steps.vars.outputs.RESOURCES_FILE }}"
         APP_DIR="${{ steps.vars.outputs.APP_DIR }}"
         EXAMPLE_DIR="${{ steps.vars.outputs.EXAMPLE_DIR }}"
         ARCHITECTURE="${{ steps.vars.outputs.ARCHITECTURE }}"
-        ALACARTE_RESOURCES=$(echo '${{ steps.vars.outputs.ALACARTE_RESOURCES }}' | jq -r '.[]')
 
         if [ -f "$ARCH_FILE" ] && [ -f "$RESOURCES_FILE" ]; then
           arch_resources=$(jq -r ".$ARCHITECTURE.resources[]" "$ARCH_FILE")
 
           if [ -n "$arch_resources" ]; then
             for resource in $arch_resources; do
-              filenames=$(jq -r ".$resource.filename[]" "$RESOURCES_FILE")
-              if [ -n "$filenames" ]; then
-                for filename in $filenames; do
-                  source_file="$EXAMPLE_DIR/$filename"
-                  target_file="$APP_DIR/$filename"
-                  if [ -f "$source_file" ]; then
-                    cp "$source_file" "$target_file"
-                  else
-                    echo "Warning: File '$filename' for resource '$resource' not found in example directory."
-                  fi
-                done
-              else
-                echo "Warning: Filenames for resource '$resource' not found in resources.json."
-              fi
-            done
-          fi
-
-          if [ -n "$ALACARTE_RESOURCES" ]; then
-            for resource in $ALACARTE_RESOURCES; do
               filenames=$(jq -r ".$resource.filename[]" "$RESOURCES_FILE")
               if [ -n "$filenames" ]; then
                 for filename in $filenames; do
@@ -130,17 +101,15 @@ jobs:
           exit 1
         fi
 
-
     - name: Create and switch to new branch
       run: |
         git config --global user.email "actions@github.com"
         git config --global user.name "GitHub Actions"
-        git checkout -b ${{ steps.vars.outputs.BRANCH_NAME }}
+        git checkout -b users/${{ github.actor }}/${{ github.event.inputs.app_name }}-${{ github.event.inputs.env }}
 
     - name: Commit and push changes to user branch
       uses: stefanzweifel/git-auto-commit-action@v5
       with:
-        branch: ${{ steps.vars.outputs.BRANCH_NAME }}
+        branch: users/${{ github.actor }}/${{ github.event.inputs.app_name }}-${{ github.event.inputs.env }}
         commit_message: "Create environment folder ${{ github.event.inputs.app_name }}/${{ github.event.inputs.env }} for ${{ github.event.inputs.architecture }}"
         push_options: '--force'
-        github_token: ${{ secrets.GITHUB_TOKEN }} # Added this line.
