@@ -20,6 +20,9 @@ on:
           - datalanding
           - webapp
           - blank
+          
+permissions:
+  contents: write
 
 jobs:
   create_env_folder:
