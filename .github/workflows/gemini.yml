@@ -42,6 +42,15 @@ jobs:
         echo "ARCHITECTURE=${{ github.event.inputs.architecture }}" >> $GITHUB_OUTPUT
         echo "BRANCH_NAME=users/${{ github.actor }}/${{ github.event.inputs.app_name }}-${{ github.event.inputs.env }}" >> $GITHUB_OUTPUT
 
+
+    - name: Check if app directory exists and exit if it does
+      id: check_app_dir
+      run: |
+        if [ -d "${{ steps.vars.outputs.APP_BASE_DIR }}" ]; then
+          echo "Error: App directory '${{ github.event.inputs.app_name }}' already exists."
+          exit 1
+        fi
+
     - name: Create environment directory
       run: |
         mkdir -p ${{ steps.vars.outputs.APP_DIR }}
