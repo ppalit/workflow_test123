@@ -1,0 +1,86 @@
+name: Create Environment Folders from JSON
+
+on:
+  workflow_dispatch:
+    inputs:
+      app_name:
+        description: 'Name of the application'
+        required: true
+        type: string
+      env:
+        description: 'Environment (e.g., dev, prod, staging)'
+        required: true
+        type: string
+      architecture:
+        description: 'Architecture type (alacarte, datalanding, webapp, blank)'
+        required: true
+        type: choice
+        options:
+          - alacarte
+          - datalanding
+          - webapp
+          - blank
+
+jobs:
+  create_env_folder:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+
+    - name: Set up variables
+      id: vars
+      run: |
+        echo "APP_DIR=${{ github.workspace }}/${{ github.event.inputs.app_name }}/${{ github.event.inputs.env }}" >> $GITHUB_OUTPUT
+        echo "REF_ARCH_FILE=${{ github.workspace }}/example/architecture/refArch.json" >> $GITHUB_OUTPUT
+        echo "RESOURCES_FILE=${{ github.workspace }}/example/architecture/resources.json" >> $GITHUB_OUTPUT
+        echo "EXAMPLE_DIR=${{ github.workspace }}/example" >> $GITHUB_OUTPUT
+        echo "ARCHITECTURE=${{ github.event.inputs.architecture }}" >> $GITHUB_OUTPUT
+
+    - name: Create environment directory
+      run: |
+        mkdir -p ${{ steps.vars.outputs.APP_DIR }}
+
+    - name: Copy files based on JSON definitions
+      run: |
+        ARCH_FILE="${{ steps.vars.outputs.REF_ARCH_FILE }}"
+        RESOURCES_FILE="${{ steps.vars.outputs.RESOURCES_FILE }}"
+        APP_DIR="${{ steps.vars.outputs.APP_DIR }}"
+        EXAMPLE_DIR="${{ steps.vars.outputs.EXAMPLE_DIR }}"
+        ARCHITECTURE="${{ steps.vars.outputs.ARCHITECTURE }}"
+
+        if [ -f "$ARCH_FILE" ] && [ -f "$RESOURCES_FILE" ]; then
+          resources=$(jq -r ".$ARCHITECTURE.resources[]" "$ARCH_FILE")
+
+          if [ -n "$resources" ]; then
+            for resource in $resources; do
+              filenames=$(jq -r ".$resource.filename[]" "$RESOURCES_FILE")
+              if [ -n "$filenames" ]; then
+                for filename in $filenames; do
+                  source_file="$EXAMPLE_DIR/$filename"
+                  target_file="$APP_DIR/$filename"
+                  if [ -f "$source_file" ]; then
+                    cp "$source_file" "$target_file"
+                  else
+                    echo "Warning: File '$filename' for resource '$resource' not found in example directory."
+                  fi
+                done
+              else
+                echo "Warning: Filenames for resource '$resource' not found in resources.json."
+              fi
+            done
+          else
+            echo "Architecture '$ARCHITECTURE' not found or has no resources."
+            exit 1
+          fi
+        else
+          echo "Architecture or resources definition file not found."
+          exit 1
+        fi
+
+    - name: Commit and push changes
+      uses: stefanzweifel/git-auto-commit-action@v5
+      with:
+        commit_message: "Create environment folder ${{ github.event.inputs.app_name }}/${{ github.event.inputs.env }} for ${{ github.event.inputs.architecture }}"
+        push_options: '--force' # if needed, remove if not needed.
