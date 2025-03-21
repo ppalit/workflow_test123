@@ -20,6 +20,16 @@ on:
           - datalanding
           - webapp
           - blank
+      resource_alacarte:
+        description: 'Select alacarte resources (optional)'
+        type: choice
+        options:
+          - keyvault
+          - sql
+          - storage
+          - eventhub
+        required: false
+        multiple: true
 
 permissions:
   contents: write
@@ -40,8 +50,8 @@ jobs:
         echo "RESOURCES_FILE=${{ github.workspace }}/example/architecture/resources.json" >> $GITHUB_OUTPUT
         echo "EXAMPLE_DIR=${{ github.workspace }}/example" >> $GITHUB_OUTPUT
         echo "ARCHITECTURE=${{ github.event.inputs.architecture }}" >> $GITHUB_OUTPUT
-        echo "BRANCH_NAME=users/${{ github.actor }}/${{ github.event.inputs.app_name }}-${{ github.event.inputs.env }}" >> $GITHUB_OUTPUT
-
+        echo "APP_BASE_DIR=${{ github.workspace }}/${{ github.event.inputs.app_name }}" >> $GITHUB_OUTPUT
+        echo "ALACARTE_RESOURCES=${{ toJson(github.event.inputs.resource_alacarte) }}" >> $GITHUB_OUTPUT
 
     - name: Check if app directory exists and exit if it does
       id: check_app_dir
@@ -55,20 +65,20 @@ jobs:
       run: |
         mkdir -p ${{ steps.vars.outputs.APP_DIR }}
 
-    - name: Copy files based on JSON definitions
+    - name: Copy files based on architecture and alacarte resources
       run: |
         ARCH_FILE="${{ steps.vars.outputs.REF_ARCH_FILE }}"
         RESOURCES_FILE="${{ steps.vars.outputs.RESOURCES_FILE }}"
         APP_DIR="${{ steps.vars.outputs.APP_DIR }}"
         EXAMPLE_DIR="${{ steps.vars.outputs.EXAMPLE_DIR }}"
         ARCHITECTURE="${{ steps.vars.outputs.ARCHITECTURE }}"
+        ALACARTE_RESOURCES=$(echo '${{ steps.vars.outputs.ALACARTE_RESOURCES }}' | jq -r '.[]')
 
         if [ -f "$ARCH_FILE" ] && [ -f "$RESOURCES_FILE" ]; then
-          resources=$(jq -r ".$ARCHITECTURE.resources[]" "$ARCH_FILE")
-          terraform_resources=$(jq -r ".terraform.filename[]" "$RESOURCES_FILE")
+          arch_resources=$(jq -r ".$ARCHITECTURE.resources[]" "$ARCH_FILE")
 
-          if [ -n "$resources" ]; then
-            for resource in $resources; do
+          if [ -n "$arch_resources" ]; then
+            for resource in $arch_resources; do
               filenames=$(jq -r ".$resource.filename[]" "$RESOURCES_FILE")
               if [ -n "$filenames" ]; then
                 for filename in $filenames; do
@@ -84,20 +94,36 @@ jobs:
                 echo "Warning: Filenames for resource '$resource' not found in resources.json."
               fi
             done
+          fi
 
-            if [ -n "$terraform_resources" ]; then
-              for resource in $terraform_resources; do
-                source_file="$EXAMPLE_DIR/$resource"
-                target_file="$APP_DIR/$resource"
-                if [ -f "$source_file" ]; then
-                  cp "$source_file" "$target_file"
-                fi
-              done
-            fi
+          if [ -n "$ALACARTE_RESOURCES" ]; then
+            for resource in $ALACARTE_RESOURCES; do
+              filenames=$(jq -r ".$resource.filename[]" "$RESOURCES_FILE")
+              if [ -n "$filenames" ]; then
+                for filename in $filenames; do
+                  source_file="$EXAMPLE_DIR/$filename"
+                  target_file="$APP_DIR/$filename"
+                  if [ -f "$source_file" ]; then
+                    cp "$source_file" "$target_file"
+                  else
+                    echo "Warning: File '$filename' for resource '$resource' not found in example directory."
+                  fi
+                done
+              else
+                echo "Warning: Filenames for resource '$resource' not found in resources.json."
+              fi
+            done
+          fi
 
-          else
-            echo "Architecture '$ARCHITECTURE' not found or has no resources."
-            exit 1
+          terraform_resources=$(jq -r ".terraform.filename[]" "$RESOURCES_FILE")
+          if [ -n "$terraform_resources" ]; then
+            for resource in $terraform_resources; do
+              source_file="$EXAMPLE_DIR/$resource"
+              target_file="$APP_DIR/$resource"
+              if [ -f "$source_file" ]; then
+                cp "$source_file" "$target_file"
+              fi
+            done
           fi
         else
           echo "Architecture or resources definition file not found."
