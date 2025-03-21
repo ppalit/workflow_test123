@@ -1,195 +1,67 @@
-name: Terraform Templates
+name: Create App Folder
 
 on:
   workflow_dispatch:
     inputs:
       app_name:
-        description: "Enter the name of your app"
+        description: 'Name of the new application'
         required: true
-      environment:
-        description: "Select an environment"
+      env:
+        description: 'Target environment (e.g., dev, prod)'
         required: true
-        type: choice
-        options:
-          - "dev"
-          - "qa"
-          - "prod"
-      predefined_option:
-        description: "Select a predefined option"
+      arch_type:
+        description: 'Architecture type (e.g., alacarte, datalanding, webapp, blank)'
         required: true
-        type: choice
-        options: []  # This will be populated dynamically using the CSV content
-      manual_templates:
-        description: "Select additional template files (alacarte resources)"
-        required: false
-        type: object  # This will allow true/false options dynamically generated
-        default: {}  # Default to empty (no resources selected)
-
-permissions:
-  contents: write
 
 jobs:
   create-folder:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      - name: Get GitHub Username
-        id: get_username
-        run: echo "username=${{ github.actor }}" >> $GITHUB_ENV
-
-      - name: Define Variables
-        id: define_vars
+      - name: Set Variables
+        id: vars
         run: |
-          APP_NAME="${{ github.event.inputs.app_name }}"
-          ENVIRONMENT="${{ github.event.inputs.environment }}"
-          APP_PATH="${APP_NAME}/${ENVIRONMENT}"
-          BRANCH_NAME="users/${{ env.username }}/${APP_NAME}-${ENVIRONMENT}"
-
-          echo "app_name=$APP_NAME" >> $GITHUB_ENV
-          echo "environment=$ENVIRONMENT" >> $GITHUB_ENV
-          echo "app_path=$APP_PATH" >> $GITHUB_ENV
-          echo "branch_name=$BRANCH_NAME" >> $GITHUB_ENV
-
-      - name: Parse CSV and Extract Architecture Options
-        id: parse_csv
-        run: |
-          # Extract the unique values from the 'arch' column
-          ARCH_OPTIONS=$(awk -F',' 'NR > 1 {split($3, a, "|"); for (i in a) print a[i]}' example/architecture/index.csv | sort -u)
-          echo "arch_options=$ARCH_OPTIONS" >> $GITHUB_ENV
-
-      - name: Set Predefined Options Dynamically
-        id: set_options
-        run: |
-          # Set the options dynamically based on the parsed arch_options
-          OPTIONS=$(echo "$ARCH_OPTIONS" | tr '\n' ' ' | sed 's/ $//')
-          echo "options=$OPTIONS" >> $GITHUB_ENV
-          echo "Final architecture options: $OPTIONS"
-
-      - name: Extract Alacarte Resources for Manual Templates
-        id: extract_alacarte
-        run: |
-          # Extract the resources marked as alacarte from the CSV file
-          ALACARTE_RESOURCES=$(awk -F',' '$3 ~ /alacarte/ {print $1}' example/architecture/index.csv)
-          echo "alacarte_resources=$ALACARTE_RESOURCES" >> $GITHUB_ENV
-          echo "Available alacarte resources: $ALACARTE_RESOURCES"
-
-      - name: Prompt for Manual Template Selection (True/False for Alacarte)
-        id: manual_template_prompt
-        run: |
-          # Create a dynamic object with true/false for each alacarte resource
-          INPUT_JSON="{}"
-          for resource in $ALACARTE_RESOURCES; do
-            INPUT_JSON=$(echo $INPUT_JSON | jq --arg resource "$resource" '. + {($resource): false}')
-          done
-          echo "manual_templates_input=$INPUT_JSON" >> $GITHUB_ENV
-          echo "Prompting for manual template selections with true/false options for each resource"
-
-      - name: Check if App Exists in Any Environment
-        id: check_app
-        run: |
-          for env in dev qa prod; do
-            if [ -d "${{ github.workspace }}/${{ env.app_name }}/$env" ]; then
-              echo "🚫 The app '${{ env.app_name }}' already exists in the '$env' environment!"
-              echo "app_exists=true" >> $GITHUB_ENV
-              exit 0
-            fi
-          done
-          echo "✅ The app does not exist in any environment. Proceeding with creation."
-          echo "app_exists=false" >> $GITHUB_ENV
-
-      - name: Stop if App Already Exists
-        if: env.app_exists == 'true'
-        run: |
-          echo "🚫 The app '${{ env.app_name }}' already exists in another environment. No changes will be made."
-          exit 0
-
-      - name: Determine Selected Templates (Remove Duplicates)
-        if: env.app_exists == 'false'
-        run: |
-          # Fetch the selected option from input
-          SELECTED_OPTION="${{ github.event.inputs.predefined_option }}"
-
-          # Initialize empty string for preset files
-          PRESET_FILES=""
-
-          # Match the selected option and add corresponding files
-          while IFS=',' read -r resource filename arch; do
-            if [[ "$arch" == *"$SELECTED_OPTION"* ]]; then
-              PRESET_FILES="$PRESET_FILES $filename"
-            fi
-          done < example/architecture/index.csv
-
-          # Always include files from terraform architecture
-          TERRAFORM_FILES=""
-          while IFS=',' read -r resource filename arch; do
-            if [[ "$arch" == *"terraform"* ]]; then
-              TERRAFORM_FILES="$TERRAFORM_FILES $filename"
-            fi
-          done < example/architecture/index.csv
-
-          # Add manual templates if selected (from the true/false JSON)
-          MANUAL_FILES=""
-          for resource in $ALACARTE_RESOURCES; do
-            if [ "${{ github.event.inputs.manual_templates[resource] }}" == "true" ]; then
-              MANUAL_FILES="$MANUAL_FILES $resource.tf"
-            fi
-          done
-
-          # Merge and remove duplicates
-          UNIQUE_FILES=$(echo -e "$PRESET_FILES\n$TERRAFORM_FILES\n$MANUAL_FILES" | tr ',' '\n' | sort -u | grep -v '^$' | tr '\n' ',' | sed 's/,$//')
-
-          echo "files=$UNIQUE_FILES" >> $GITHUB_ENV
-          echo "Final selected files: $UNIQUE_FILES"
+          USERNAME=$(echo "${{ github.actor }}" | tr '[:upper:]' '[:lower:]')
+          BRANCH_NAME="users/$USERNAME/${{ github.event.inputs.app_name }}-${{ github.event.inputs.env }}"
+          echo "BRANCH_NAME=$BRANCH_NAME" >> $GITHUB_ENV
 
       - name: Create New Branch
-        if: env.app_exists == 'false'
         run: |
-          git checkout -b "${{ env.branch_name }}"
+          git checkout -b "$BRANCH_NAME"
 
-      - name: Create App Folder and Copy Files
-        if: env.app_exists == 'false'
+      - name: Parse JSON and Copy Files
         run: |
-          mkdir -p "${{ env.app_path }}"
-          IFS=',' read -ra FILES <<< "$files"
-          OUTPUT_FILE="copied_files.txt"
-          > $OUTPUT_FILE  # Clear output file
+          APP_NAME=${{ github.event.inputs.app_name }}
+          ENV=${{ github.event.inputs.env }}
+          ARCH_TYPE=${{ github.event.inputs.arch_type }}
+          TARGET_DIR="$APP_NAME/$ENV"
+          mkdir -p "$TARGET_DIR"
 
-          for file in "${FILES[@]}"; do
-            FILE_PATH="example/$file"
-            if [[ -f "$FILE_PATH" ]]; then
-              cp "$FILE_PATH" "${{ env.app_path }}/"
-              echo "$file" >> $OUTPUT_FILE
-            else
-              echo "⚠️ Warning: $FILE_PATH does not exist, skipping."
+          ARCH_FILE="examples/architecture/refArch.json"
+          RES_FILE="examples/architecture/resources.json"
+
+          # Get all resources corresponding to the arch_type
+          RESOURCES=$(jq -r --arg arch "$ARCH_TYPE" '.[$arch][]' "$ARCH_FILE")
+          
+          # Find corresponding files in resources.json and copy them
+          COPIED_FILES=""
+          for resource in $RESOURCES; do
+            FILE_PATH=$(jq -r --arg res "$resource" '.[$res]' "$RES_FILE")
+            if [[ "$FILE_PATH" != "null" ]]; then
+              cp "examples/architecture/$FILE_PATH" "$TARGET_DIR/"
+              COPIED_FILES+="$FILE_PATH "
             fi
           done
-
-      - name: Read Copied Files List
-        if: env.app_exists == 'false'
-        run: |
-          COPIED_FILES=$(cat copied_files.txt || echo "No files copied")
-          echo "copied_files=$COPIED_FILES" >> $GITHUB_ENV
+          
+          echo "Copied files: $COPIED_FILES"
+          echo "COPIED_FILES=$COPIED_FILES" >> $GITHUB_ENV
 
       - name: Commit and Push Changes
-        if: env.app_exists == 'false'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions@github.com"
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
           git add .
-          git commit -m "Created folder ${{ env.app_path }} with selected templates" || echo "No changes to commit"
-          git push origin "${{ env.branch_name }}"
-
-      - name: Provide PR Link and File Summary
-        if: env.app_exists == 'false'
-        run: |
-          echo "## 🎉 New Branch Created!" >> $GITHUB_STEP_SUMMARY
-          echo "Branch: ${{ env.branch_name }}" >> $GITHUB_STEP_SUMMARY
-          echo "[Create a Pull Request](https://github.com/${{ github.repository }}/compare/main...${{ env.branch_name }})" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### 📂 Files Created in '${{ env.app_path }}':" >> $GITHUB_STEP_SUMMARY
-          echo "```\n$(cat copied_files.txt)```" >> $GITHUB_STEP_SUMMARY
+          git commit -m "Create new app folder for ${{ github.event.inputs.app_name }} in ${{ github.event.inputs.env }}"
+          git push origin "$BRANCH_NAME"
