@@ -1,8 +1,4 @@
 {
-    "alacarte":{
-        "description": "A modular architecture that allows for flexible deployment of components.",
-        "resources": ["keyvault" ,"sql", "storage", "eventhub"]
-    },
     "datalanding":{
         "description": "An architecture focused on data ingestion and processing.",
         "resources": [ "keyvault", "sql", "storage"]
@@ -11,7 +7,7 @@
         "description": "An architecture designed for web applications with integrated services.",
         "resources": ["keyvault", "storage"]
     },
-    "blank":{
+    "default":{
         "description": "A base architecture for managing infrastructure as code.",
         "resources": [ "terraform"]
     }

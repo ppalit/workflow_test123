@@ -12,14 +12,14 @@ on:
         required: true
         type: string
       architecture:
-        description: 'Architecture type (alacarte, datalanding, webapp, blank)'
+        description: 'Architecture type (datalanding, webapp, default)'
         required: true
         type: choice
         options:
           - alacarte
           - datalanding
           - webapp
-          - blank
+          - default
 
 
 
@@ -27,8 +27,8 @@ permissions:
   contents: write
 
 jobs:
-  create_env_folder:
-    runs_on: ubuntu-latest
+  create-folder:
+    runs-on: ubuntu-latest
 
     steps:
     - name: Checkout repository
