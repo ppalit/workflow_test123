@@ -1,4 +1,4 @@
-name: Create Environment Folders from JSON
+name: Create Environment Folders to User Branch
 
 on:
   workflow_dispatch:
@@ -37,6 +37,7 @@ jobs:
         echo "RESOURCES_FILE=${{ github.workspace }}/example/architecture/resources.json" >> $GITHUB_OUTPUT
         echo "EXAMPLE_DIR=${{ github.workspace }}/example" >> $GITHUB_OUTPUT
         echo "ARCHITECTURE=${{ github.event.inputs.architecture }}" >> $GITHUB_OUTPUT
+        echo "BRANCH_NAME=users/${{ github.actor }}/${{ github.event.inputs.app_name }}-${{ github.event.inputs.env }}" >> $GITHUB_OUTPUT
 
     - name: Create environment directory
       run: |
@@ -79,8 +80,13 @@ jobs:
           exit 1
         fi
 
-    - name: Commit and push changes
+    - name: Create and switch to new branch
+      run: |
+        git checkout -b ${{ steps.vars.outputs.BRANCH_NAME }}
+
+    - name: Commit and push changes to user branch
       uses: stefanzweifel/git-auto-commit-action@v5
       with:
+        branch: ${{ steps.vars.outputs.BRANCH_NAME }}
         commit_message: "Create environment folder ${{ github.event.inputs.app_name }}/${{ github.event.inputs.env }} for ${{ github.event.inputs.architecture }}"
-        push_options: '--force' # if needed, remove if not needed.
+        push_options: '--force'
