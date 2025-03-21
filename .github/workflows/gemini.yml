@@ -20,7 +20,7 @@ on:
           - datalanding
           - webapp
           - blank
-          
+
 permissions:
   contents: write
 
@@ -56,6 +56,7 @@ jobs:
 
         if [ -f "$ARCH_FILE" ] && [ -f "$RESOURCES_FILE" ]; then
           resources=$(jq -r ".$ARCHITECTURE.resources[]" "$ARCH_FILE")
+          terraform_resources=$(jq -r ".terraform.filename[]" "$RESOURCES_FILE")
 
           if [ -n "$resources" ]; then
             for resource in $resources; do
@@ -74,6 +75,17 @@ jobs:
                 echo "Warning: Filenames for resource '$resource' not found in resources.json."
               fi
             done
+
+            if [ -n "$terraform_resources" ]; then
+              for resource in $terraform_resources; do
+                source_file="$EXAMPLE_DIR/$resource"
+                target_file="$APP_DIR/$resource"
+                if [ -f "$source_file" ]; then
+                  cp "$source_file" "$target_file"
+                fi
+              done
+            fi
+
           else
             echo "Architecture '$ARCHITECTURE' not found or has no resources."
             exit 1
@@ -82,6 +94,7 @@ jobs:
           echo "Architecture or resources definition file not found."
           exit 1
         fi
+
 
     - name: Create and switch to new branch
       run: |
