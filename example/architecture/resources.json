@@ -1,0 +1,19 @@
+{
+    "keyvault": {
+        "filename": ["keyvault.tf"]
+      },
+    "sql": {
+        "filename": ["sql_server.tf"]
+      },
+    "storage": {
+        "filename": ["storage_account.tf"]
+      },
+    "eventhub": {
+        "filename": ["eventhub.tf"]
+      },
+    "terraform": {
+        "filename": ["variable.tf", "main.tf"]
+      }
+    
+  }
+  
