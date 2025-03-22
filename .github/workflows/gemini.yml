@@ -43,6 +43,7 @@ jobs:
         echo "EXAMPLE_DIR=${{ github.workspace }}/example" >> $GITHUB_OUTPUT
         echo "ARCHITECTURE=${{ github.event.inputs.architecture }}" >> $GITHUB_OUTPUT
         echo "APP_BASE_DIR=${{ github.workspace }}/${{ github.event.inputs.app_name }}" >> $GITHUB_OUTPUT
+        echo "BRANCH_NAME=users/${{ github.actor }}/${{ github.event.inputs.app_name }}-${{ github.event.inputs.env }}" >> $GITHUB_OUTPUT
 
     - name: Check if app directory exists and exit if it does
       id: check_app_dir
@@ -105,11 +106,21 @@ jobs:
       run: |
         git config --global user.email "actions@github.com"
         git config --global user.name "GitHub Actions"
-        git checkout -b users/${{ github.actor }}/${{ github.event.inputs.app_name }}-${{ github.event.inputs.env }}
+        git checkout -b ${{ steps.vars.outputs.BRANCH_NAME }}
 
     - name: Commit and push changes to user branch
-      uses: stefanzweifel/git-auto-commit-action@v5
-      with:
-        branch: users/${{ github.actor }}/${{ github.event.inputs.app_name }}-${{ github.event.inputs.env }}
-        commit_message: "Create environment folder ${{ github.event.inputs.app_name }}/${{ github.event.inputs.env }} for ${{ github.event.inputs.architecture }}"
-        push_options: '--force'
+      run: |
+        git add ${{ steps.vars.outputs.APP_DIR }}/*
+        git commit -m "Create environment folder ${{ github.event.inputs.app_name }}/${{ github.event.inputs.env }} for ${{ github.event.inputs.architecture }}"
+        git push origin ${{ steps.vars.outputs.BRANCH_NAME }} --force
+
+    - name: Workflow Summary
+      run: |
+        echo "Workflow Summary:"
+        echo "-----------------"
+        echo "App Name: ${{ github.event.inputs.app_name }}"
+        echo "Environment: ${{ github.event.inputs.env }}"
+        echo "Architecture: ${{ github.event.inputs.architecture }}"
+        echo "Created Branch: ${{ steps.vars.outputs.BRANCH_NAME }}"
+        echo "Created Files:"
+        echo "${{ steps.copy_files.outputs.FILE_LIST }}"
