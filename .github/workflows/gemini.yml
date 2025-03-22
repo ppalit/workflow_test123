@@ -68,6 +68,7 @@ jobs:
         APP_DIR="${{ steps.vars.outputs.APP_DIR }}"
         EXAMPLE_DIR="${{ steps.vars.outputs.EXAMPLE_DIR }}"
         ARCHITECTURE="${{ steps.vars.outputs.ARCHITECTURE }}"
+        FILE_LIST=""
 
         if [ -f "$ARCH_FILE" ] && [ -f "$RESOURCES_FILE" ]; then
           arch_resources=$(jq -r ".$ARCHITECTURE.resources[]" "$ARCH_FILE")
@@ -99,7 +100,7 @@ jobs:
               target_file="$APP_DIR/$resource"
               if [ -f "$source_file" ]; then
                 cp "$source_file" "$target_file"
-                FILE_LIST="$FILE_LIST$resource\n"
+                FILE_LIST="$FILE_LIST$resource ,"
               fi
             done
           fi
