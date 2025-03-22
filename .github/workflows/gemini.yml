@@ -80,6 +80,7 @@ jobs:
                   source_file="$EXAMPLE_DIR/$filename"
                   target_file="$APP_DIR/$filename"
                   if [ -f "$source_file" ]; then
+                    FILE_LIST="$FILE_LIST$filename\n"
                     cp "$source_file" "$target_file"
                   else
                     echo "Warning: File '$filename' for resource '$resource' not found in example directory."
@@ -98,9 +99,14 @@ jobs:
               target_file="$APP_DIR/$resource"
               if [ -f "$source_file" ]; then
                 cp "$source_file" "$target_file"
+                FILE_LIST="$FILE_LIST$resource\n"
               fi
             done
           fi
+          echo "Final FILE_LIST: $FILE_LIST" # Debugging
+          echo "FILE_LIST<<EOF" >> $GITHUB_OUTPUT
+          echo "$FILE_LIST" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
         else
           echo "Architecture or resources definition file not found."
           exit 1
