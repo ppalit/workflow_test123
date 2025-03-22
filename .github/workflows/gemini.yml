@@ -7,16 +7,20 @@ on:
         description: 'Name of the application'
         required: true
         type: string
-      env:
+      eenv:
         description: 'Environment (e.g., dev, prod, staging)'
         required: true
-        type: string
+        type: choice
+        options:
+          - dev
+          - qa
+          - rel
+          - prod
       architecture:
         description: 'Architecture type (datalanding, webapp, default)'
         required: true
         type: choice
         options:
-          - alacarte
           - datalanding
           - webapp
           - default
@@ -116,11 +120,12 @@ jobs:
 
     - name: Workflow Summary
       run: |
-        echo "Workflow Summary:"
-        echo "-----------------"
-        echo "App Name: ${{ github.event.inputs.app_name }}"
-        echo "Environment: ${{ github.event.inputs.env }}"
-        echo "Architecture: ${{ github.event.inputs.architecture }}"
-        echo "Created Branch: ${{ steps.vars.outputs.BRANCH_NAME }}"
-        echo "Created Files:"
-        echo "${{ steps.copy_files.outputs.FILE_LIST }}"
+        echo "## Summary" >> $GITHUB_STEP_SUMMARY
+        echo "App Name: ${{ github.event.inputs.app_name }}" >> $GITHUB_STEP_SUMMARY
+        echo "Environment: ${{ github.event.inputs.env }}" >> $GITHUB_STEP_SUMMARY
+        echo "Architecture: ${{ github.event.inputs.architecture }}" >> $GITHUB_STEP_SUMMARY
+        echo "Created Branch: ${{ steps.vars.outputs.BRANCH_NAME }}" >> $GITHUB_STEP_SUMMARY
+        echo "### Created Files:" >> $GITHUB_STEP_SUMMARY
+        echo "```" >> $GITHUB_STEP_SUMMARY
+        echo "${{ steps.copy_files.outputs.FILE_LIST }}" >> $GITHUB_STEP_SUMMARY
+        echo "```" >> $GITHUB_STEP_SUMMARY
