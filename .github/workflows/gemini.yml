@@ -42,8 +42,8 @@ jobs:
       id: vars
       run: |
         echo "APP_DIR=${{ github.workspace }}/${{ github.event.inputs.app_name }}/${{ github.event.inputs.env }}" >> $GITHUB_OUTPUT
-        echo "REF_ARCH_FILE=${{ github.workspace }}/example/architecture/refArch.json" >> $GITHUB_OUTPUT
-        echo "RESOURCES_FILE=${{ github.workspace }}/example/architecture/resources.json" >> $GITHUB_OUTPUT
+        echo "REF_ARCH_FILE=${{ github.workspace }}/example/architecture/refArch.yaml" >> $GITHUB_OUTPUT
+        echo "RESOURCES_FILE=${{ github.workspace }}/example/architecture/resources.yaml" >> $GITHUB_OUTPUT
         echo "EXAMPLE_DIR=${{ github.workspace }}/example" >> $GITHUB_OUTPUT
         echo "ARCHITECTURE=${{ github.event.inputs.architecture }}" >> $GITHUB_OUTPUT
         echo "APP_BASE_DIR=${{ github.workspace }}/${{ github.event.inputs.app_name }}" >> $GITHUB_OUTPUT
@@ -71,11 +71,11 @@ jobs:
         FILE_LIST=""
 
         if [ -f "$ARCH_FILE" ] && [ -f "$RESOURCES_FILE" ]; then
-          arch_resources=$(jq -r ".$ARCHITECTURE.resources[]" "$ARCH_FILE")
+          arch_resources=$(yq -r ".$ARCHITECTURE.resources[]" "$ARCH_FILE")
 
           if [ -n "$arch_resources" ]; then
             for resource in $arch_resources; do
-              filenames=$(jq -r ".$resource.filename[]" "$RESOURCES_FILE")
+              filenames=$(yq -r ".$resource.filename[]" "$RESOURCES_FILE")
               if [ -n "$filenames" ]; then
                 for filename in $filenames; do
                   source_file="$EXAMPLE_DIR/$filename"
@@ -88,12 +88,12 @@ jobs:
                   fi
                 done
               else
-                echo "Warning: Filenames for resource '$resource' not found in resources.json."
+                echo "Warning: Filenames for resource '$resource' not found in resources.yaml."
               fi
             done
           fi
 
-          terraform_resources=$(jq -r ".terraform.filename[]" "$RESOURCES_FILE")
+          terraform_resources=$(yq -r ".terraform.filename[]" "$RESOURCES_FILE")
           if [ -n "$terraform_resources" ]; then
             for resource in $terraform_resources; do
               source_file="$EXAMPLE_DIR/$resource"
