@@ -23,11 +23,13 @@ eventhub:
   variables:
     - eventhub_namespace_name: "evhns-%app_name%-%env%-01"
     - eventhubs: |
-        example-01 = {
-          name= "evh-%app_name%-%env%-01"
-          partition_count= 1
+        {
+          example-01 = {
+            name= "evh-%app_name%-%env%-01"
+            partition_count= 1
+          }
         }
-        
+
 terraform:
   filename:
     - variable.tf

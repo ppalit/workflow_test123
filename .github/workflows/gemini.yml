@@ -140,11 +140,17 @@ jobs:
             variables=$(yq -r ".$resource.variables" "$RESOURCES_FILE")
 
             if [ -n "$variables" ]; then
+              echo "$resource:" >> "$APP_DIR/$TFVARS_FILE"
               echo "$variables" | while IFS='=' read -r key value; do
                 if [[ -n "$key" && -n "$value" ]]; then
-                  echo "$key = \"$(echo "$value" | sed -e 's/%app_name%/${{ github.event.inputs.app_name }}/g' -e 's/%env%/${{ github.event.inputs.env }}/g' -e 's/%region%/$REGION/g')\"" >> "$APP_DIR/$TFVARS_FILE"
+                  if [[ "$value" == *'|'* ]]; then # multiline variable
+                    echo "  $key = $(echo "$value" | sed -e 's/|//')" >> "$APP_DIR/$TFVARS_FILE"
+                  else
+                    echo "  $key = \"$(echo "$value" | sed -e 's/%app_name%/${{ github.event.inputs.app_name }}/g' -e 's/%env%/${{ github.event.inputs.env }}/g' -e 's/%region%/$REGION/g')\"" >> "$APP_DIR/$TFVARS_FILE"
+                  fi
                 fi
               done
+              echo "" >> "$APP_DIR/$TFVARS_FILE" # Add a blank line between resources
             fi
           done
         fi
@@ -169,7 +175,7 @@ jobs:
         echo "Architecture: ${{ github.event.inputs.architecture }}" >> $GITHUB_STEP_SUMMARY
         echo "Created Branch: ${{ steps.vars.outputs.BRANCH_NAME }}" >> $GITHUB_STEP_SUMMARY
         echo "### Created Files:" >> $GITHUB_STEP_SUMMARY
+        echo "```" >> <span class="math-inline">GITHUB\_STEP\_SUMMARY
+        echo "</span>{{ steps.copy_files.outputs.FILE_LIST }}" >> $GITHUB_STEP_SUMMARY
         echo "```" >> $GITHUB_STEP_SUMMARY
-        echo "${{ steps.copy_files.outputs.FILE_LIST }}" >> $GITHUB_STEP_SUMMARY
-        echo "```" >> $GITHUB_STEP_SUMMARY
-        echo "Created tfvars file: ${{ steps.vars.outputs.TFVARS_FILE }}" >> $GITHUB_STEP_SUMMARY
+        echo "Created tfvars file: ${{ steps.vars.outputs.TFVARS_FILE }}" >>
