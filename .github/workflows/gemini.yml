@@ -42,6 +42,11 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v3
 
+    - name: Install yq (v4)
+      run: |
+        sudo snap install yq
+        yq --version
+
     - name: Set up variables
       id: vars
       run: |
