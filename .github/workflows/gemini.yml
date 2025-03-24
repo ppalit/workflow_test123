@@ -137,20 +137,22 @@ jobs:
           IFS=',' read -ra SELECTED_ARRAY <<< "$SELECTED_RESOURCES"
           for resource in "${SELECTED_ARRAY[@]}"; do
             resource=$(echo "$resource" | tr -d ' ')
-            variables=$(yq -r ".$resource.variables" "$RESOURCES_FILE")
+            if [[ "$resource" != "terraform" ]]; then # Exclude terraform core files
+              variables=$(yq -r ".$resource.variables" "$RESOURCES_FILE")
 
-            if [ -n "$variables" ]; then
-              echo "$resource:" >> "$APP_DIR/$TFVARS_FILE"
-              echo "$variables" | while IFS='=' read -r key value; do
-                if [[ -n "$key" && -n "$value" ]]; then
-                  if [[ "$value" == *'|'* ]]; then # multiline variable
-                    echo "  $key = $(echo "$value" | sed -e 's/|//')" >> "$APP_DIR/$TFVARS_FILE"
-                  else
-                    echo "  $key = \"$(echo "$value" | sed -e 's/%app_name%/${{ github.event.inputs.app_name }}/g' -e 's/%env%/${{ github.event.inputs.env }}/g' -e 's/%region%/$REGION/g')\"" >> "$APP_DIR/$TFVARS_FILE"
+              if [ -n "$variables" ]; then
+                echo "## $resource" >> "$APP_DIR/$TFVARS_FILE"
+                echo "$variables" | while IFS='=' read -r key value; do
+                  if [[ -n "$key" && -n "$value" ]]; then
+                    if [[ "$value" == *'|'* ]]; then # multiline variable
+                      echo "  $key = $(echo "$value" | sed -e 's/|//')" >> "$APP_DIR/$TFVARS_FILE"
+                    else
+                      echo "  $key = \"$(echo \"$value\" | sed -e 's/%app_name%/${{ github.event.inputs.app_name }}/g' -e 's/%env%/${{ github.event.inputs.env }}/g' -e 's/%region%/$REGION/g')\"" >> "$APP_DIR/$TFVARS_FILE"
+                    fi
                   fi
-                fi
-              done
-              echo "" >> "$APP_DIR/$TFVARS_FILE" # Add a blank line between resources
+                done
+                echo "" >> "$APP_DIR/$TFVARS_FILE" # Add a blank line between resources
+              fi
             fi
           done
         fi
@@ -177,5 +179,4 @@ jobs:
         echo "### Created Files:" >> $GITHUB_STEP_SUMMARY
         echo "```" >> <span class="math-inline">GITHUB\_STEP\_SUMMARY
         echo "</span>{{ steps.copy_files.outputs.FILE_LIST }}" >> $GITHUB_STEP_SUMMARY
-        echo "```" >> $GITHUB_STEP_SUMMARY
-        echo "Created tfvars file: ${{ steps.vars.outputs.TFVARS_FILE }}" >>
+        echo "```" >> $GITHUB_
