@@ -8,7 +8,7 @@ on:
         required: true
         type: string
       env:
-        description: 'Environment (e.g., dev, prod, staging)'
+        description: 'Environment (e.g., dev, qa, rel, prod)'
         required: true
         type: choice
         options:
@@ -17,15 +17,19 @@ on:
           - rel
           - prod
       architecture:
-        description: 'Architecture type (datalanding, webapp, default)'
+        description: 'Architecture type (datalanding, webapp, messaging, default)'
         required: true
         type: choice
         options:
           - datalanding
           - webapp
+          - messaging
           - default
-
-
+      region:
+        description: 'Region for tfvars file (optional)'
+        type: string
+        required: false
+        default: "use2"
 
 permissions:
   contents: write
@@ -48,6 +52,7 @@ jobs:
         echo "ARCHITECTURE=${{ github.event.inputs.architecture }}" >> $GITHUB_OUTPUT
         echo "APP_BASE_DIR=${{ github.workspace }}/${{ github.event.inputs.app_name }}" >> $GITHUB_OUTPUT
         echo "BRANCH_NAME=users/${{ github.actor }}/${{ github.event.inputs.app_name }}-${{ github.event.inputs.env }}" >> $GITHUB_OUTPUT
+        echo "TFVARS_FILE=${{ github.event.inputs.app_name }}_${{ github.event.inputs.env }}_${{ github.event.inputs.region }}.tfvars" >> $GITHUB_OUTPUT
 
     - name: Check if app directory exists and exit if it does
       id: check_app_dir
@@ -62,6 +67,7 @@ jobs:
         mkdir -p ${{ steps.vars.outputs.APP_DIR }}
 
     - name: Copy files based on architecture
+      id: copy_files
       run: |
         ARCH_FILE="${{ steps.vars.outputs.REF_ARCH_FILE }}"
         RESOURCES_FILE="${{ steps.vars.outputs.RESOURCES_FILE }}"
@@ -69,6 +75,7 @@ jobs:
         EXAMPLE_DIR="${{ steps.vars.outputs.EXAMPLE_DIR }}"
         ARCHITECTURE="${{ steps.vars.outputs.ARCHITECTURE }}"
         FILE_LIST=""
+        SELECTED_RESOURCES=""
 
         if [ -f "$ARCH_FILE" ] && [ -f "$RESOURCES_FILE" ]; then
           arch_resources=$(yq -r ".$ARCHITECTURE.resources[]" "$ARCH_FILE")
@@ -83,6 +90,7 @@ jobs:
                   if [ -f "$source_file" ]; then
                     FILE_LIST="$FILE_LIST$filename\n"
                     cp "$source_file" "$target_file"
+                    SELECTED_RESOURCES="$SELECTED_RESOURCES$resource,"
                   else
                     echo "Warning: File '$filename' for resource '$resource' not found in example directory."
                   fi
@@ -100,17 +108,45 @@ jobs:
               target_file="$APP_DIR/$resource"
               if [ -f "$source_file" ]; then
                 cp "$source_file" "$target_file"
-                FILE_LIST="$FILE_LIST$resource ,"
+                FILE_LIST="$FILE_LIST$resource\n"
+                SELECTED_RESOURCES="$SELECTED_RESOURCES$resource,"
               fi
             done
           fi
-          echo "Final FILE_LIST: $FILE_LIST" # Debugging
+          echo "Final FILE_LIST: $FILE_LIST"
           echo "FILE_LIST<<EOF" >> $GITHUB_OUTPUT
           echo "$FILE_LIST" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+          echo "SELECTED_RESOURCES<<EOF" >> $GITHUB_OUTPUT
+          echo "$SELECTED_RESOURCES" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
         else
           echo "Architecture or resources definition file not found."
           exit 1
+        fi
+
+    - name: Generate tfvars file
+      run: |
+        RESOURCES_FILE="${{ steps.vars.outputs.RESOURCES_FILE }}"
+        TFVARS_FILE="${{ steps.vars.outputs.TFVARS_FILE }}"
+        APP_DIR="${{ steps.vars.outputs.APP_DIR }}"
+        SELECTED_RESOURCES="${{ steps.copy_files.outputs.SELECTED_RESOURCES }}"
+        REGION="${{ github.event.inputs.region }}"
+
+        if [ -n "$SELECTED_RESOURCES" ]; then
+          IFS=',' read -ra SELECTED_ARRAY <<< "$SELECTED_RESOURCES"
+          for resource in "${SELECTED_ARRAY[@]}"; do
+            resource=$(echo "$resource" | tr -d ' ')
+            variables=$(yq -r ".$resource.variables" "$RESOURCES_FILE")
+
+            if [ -n "$variables" ]; then
+              echo "$variables" | while IFS='=' read -r key value; do
+                if [[ -n "$key" && -n "$value" ]]; then
+                  echo "$key = \"$(echo "$value" | sed -e 's/%app_name%/${{ github.event.inputs.app_name }}/g' -e 's/%env%/${{ github.event.inputs.env }}/g' -e 's/%region%/$REGION/g')\"" >> "$APP_DIR/$TFVARS_FILE"
+                fi
+              done
+            fi
+          done
         fi
 
     - name: Create and switch to new branch
@@ -136,3 +172,4 @@ jobs:
         echo "```" >> $GITHUB_STEP_SUMMARY
         echo "${{ steps.copy_files.outputs.FILE_LIST }}" >> $GITHUB_STEP_SUMMARY
         echo "```" >> $GITHUB_STEP_SUMMARY
+        echo "Created tfvars file: ${{ steps.vars.outputs.TFVARS_FILE }}" >> $GITHUB_STEP_SUMMARY

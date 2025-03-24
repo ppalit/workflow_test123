@@ -27,6 +27,7 @@ eventhub:
           name= "evh-%app_name%-%env%-01"
           partition_count= 1
         }
+        
 terraform:
   filename:
     - variable.tf

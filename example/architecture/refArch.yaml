@@ -11,6 +11,13 @@ webapp:
     - keyvault
     - storage
 
+messaging:
+  description: "An architecture designed for messaging applications."
+  resources:
+    - keyvault
+    - storage
+    - eventhub
+
 default:
   description: "A base architecture for managing infrastructure as code."
   resources:
