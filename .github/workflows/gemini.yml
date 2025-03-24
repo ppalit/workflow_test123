@@ -138,30 +138,39 @@ jobs:
         SELECTED_RESOURCES="${{ steps.copy_files.outputs.SELECTED_RESOURCES }}"
         REGION="${{ github.event.inputs.region }}"
 
+        echo "Debugging: SELECTED_RESOURCES = [$SELECTED_RESOURCES]" >> "$APP_DIR/debug.log"
+
         if [ -n "$SELECTED_RESOURCES" ]; then
           IFS=',' read -ra SELECTED_ARRAY <<< "$SELECTED_RESOURCES"
           for resource in "${SELECTED_ARRAY[@]}"; do
-            resource=$(echo "$resource" | tr -d ' ')
-            if [[ "$resource" != "terraform" ]]; then # Exclude terraform core files
+            resource=$(echo "$resource" | tr -d ' ')  # Trim spaces
+            echo "Debugging: Processing resource = $resource" >> "$APP_DIR/debug.log"
+            if [[ "$resource" != "terraform" ]]; then
               variables=$(yq -r ".$resource.variables" "$RESOURCES_FILE")
+              echo "Debugging: yq output for $resource = [$variables]" >> "$APP_DIR/debug.log"
 
               if [ -n "$variables" ]; then
                 echo "## $resource" >> "$APP_DIR/$TFVARS_FILE"
                 echo "$variables" | while IFS='=' read -r key value; do
                   if [[ -n "$key" && -n "$value" ]]; then
-                    if [[ "$value" == *'|'* ]]; then # multiline variable
-                      echo "  $key = $(echo "$value" | sed -e 's/|//')" >> "$APP_DIR/$TFVARS_FILE"
+                    # Handle multiline string more carefully
+                    if [[ "$value" == *'|'* ]]; then
+                      value=$(echo "$value" | sed 's/^[[:space:]]*|//' | tr -d '\r')
+                      value=$(echo "$value" | sed 's/^[[:space:]]*//') #remove leading spaces
+                      value=$(echo "$value" | sed 's/[[:space:]]*$//') #remove trailing spaces
+                      echo "  $key = $value" >> "$APP_DIR/$TFVARS_FILE"
                     else
-                      echo "  $key = \"$(echo \"$value\" | sed -e 's/%app_name%/${{ github.event.inputs.app_name }}/g' -e 's/%env%/${{ github.event.inputs.env }}/g' -e 's/%region%/$REGION/g')\"" >> "$APP_DIR/$TFVARS_FILE"
+                      value=$(echo "$value" | sed -e 's/%app_name%/${{ github.event.inputs.app_name }}/g' -e 's/%env%/${{ github.event.inputs.env }}/g' -e 's/%region%/$REGION/g')
+                      echo "  $key = \"$value\"" >> "$APP_DIR/$TFVARS_FILE"
                     fi
                   fi
                 done
-                echo "" >> "$APP_DIR/$TFVARS_FILE" # Add a blank line between resources
+                echo "" >> "$APP_DIR/$TFVARS_FILE"
               fi
             fi
           done
         fi
-
+  
     - name: Create and switch to new branch
       run: |
         git config --global user.email "actions@github.com"
