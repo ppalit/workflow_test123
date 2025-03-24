@@ -93,44 +93,7 @@ jobs:
         echo "EOF" >> $GITHUB_ENV
 
     - name: Generate tfvars file
-      run: |
-        RESOURCES_FILE="${{ steps.vars.outputs.RESOURCES_FILE }}"
-        TFVARS_FILE="${{ steps.vars.outputs.TFVARS_FILE }}"
-        APP_DIR="${{ steps.vars.outputs.APP_DIR }}"
-        SELECTED_RESOURCES="${{ steps.copy_files.outputs.SELECTED_RESOURCES }}"
-        REGION="${{ github.event.inputs.region }}"
-
-        echo "Debugging: SELECTED_RESOURCES = [$SELECTED_RESOURCES]" >> "$APP_DIR/debug.log"
-
-        if [ -n "$SELECTED_RESOURCES" ]; then
-          IFS=',' read -ra SELECTED_ARRAY <<< "$SELECTED_RESOURCES"
-          for resource in "${SELECTED_ARRAY[@]}"; do
-            resource=$(echo "$resource" | tr -d ' ')  # Trim spaces
-            if [[ "$resource" != "terraform" ]]; then
-              variables=$(yq -r ".$resource.variables[]" "$RESOURCES_FILE")
-
-              if [ -n "$variables" ]; then
-                echo "## $resource" >> "$APP_DIR/$TFVARS_FILE"
-                while IFS= read -r line; do
-                  key=$(echo "$line" | cut -d ':' -f 1 | tr -d ' ')
-                  value=$(echo "$line" | cut -d ':' -f 2- | sed -e 's/%app_name%/${{ github.event.inputs.app_name }}/g' -e 's/%env%/${{ github.event.inputs.env }}/g' -e 's/%region%/'"$REGION"'/g' | sed 's/^ *//g')
-
-                  if [[ "$value" == "|" ]]; then
-                    # Handle multi-line values correctly
-                    echo "$key = {" >> "$APP_DIR/$TFVARS_FILE"
-                  elif [[ "$value" == "}" ]]; then
-                    echo "}" >> "$APP_DIR/$TFVARS_FILE"
-                  else
-                    echo "$key = \"$value\"" >> "$APP_DIR/$TFVARS_FILE"
-                  fi
-                done <<< "$variables"
-                echo "" >> "$APP_DIR/$TFVARS_FILE"
-              fi
-            fi
-          done
-        fi
-
-    - name: Generate tfvars file
+      id: generate_tfvars
       run: |
         RESOURCES_FILE="${{ steps.vars.outputs.RESOURCES_FILE }}"
         TFVARS_FILE="${{ steps.vars.outputs.TFVARS_FILE }}"
