@@ -42,146 +42,91 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v3
 
-    - name: Install yq (v4)
-      run: |
-        sudo snap install yq
-        yq --version
-
     - name: Set up variables
       id: vars
       run: |
-        echo "APP_DIR=${{ github.workspace }}/${{ github.event.inputs.app_name }}/${{ github.event.inputs.env }}" >> $GITHUB_OUTPUT
-        echo "REF_ARCH_FILE=${{ github.workspace }}/example/architecture/refArch.yaml" >> $GITHUB_OUTPUT
-        echo "RESOURCES_FILE=${{ github.workspace }}/example/architecture/resources.yaml" >> $GITHUB_OUTPUT
-        echo "EXAMPLE_DIR=${{ github.workspace }}/example" >> $GITHUB_OUTPUT
-        echo "ARCHITECTURE=${{ github.event.inputs.architecture }}" >> $GITHUB_OUTPUT
-        echo "APP_BASE_DIR=${{ github.workspace }}/${{ github.event.inputs.app_name }}" >> $GITHUB_OUTPUT
-        echo "BRANCH_NAME=users/${{ github.actor }}/${{ github.event.inputs.app_name }}-${{ github.event.inputs.env }}" >> $GITHUB_OUTPUT
-        echo "TFVARS_FILE=${{ github.event.inputs.app_name }}_${{ github.event.inputs.env }}_${{ github.event.inputs.region }}.tfvars" >> $GITHUB_OUTPUT
+        echo "APP_DIR=${{ github.workspace }}/${{ github.event.inputs.app_name }}/${{ github.event.inputs.env }}" >> $GITHUB_ENV
+        echo "REF_ARCH_FILE=${{ github.workspace }}/example/architecture/refArch.yaml" >> $GITHUB_ENV
+        echo "RESOURCES_FILE=${{ github.workspace }}/example/architecture/resources.yaml" >> $GITHUB_ENV
+        echo "EXAMPLE_DIR=${{ github.workspace }}/example" >> $GITHUB_ENV
+        echo "ARCHITECTURE=${{ github.event.inputs.architecture }}" >> $GITHUB_ENV
+        echo "APP_BASE_DIR=${{ github.workspace }}/${{ github.event.inputs.app_name }}" >> $GITHUB_ENV
+        echo "BRANCH_NAME=users/${{ github.actor }}/${{ github.event.inputs.app_name }}-${{ github.event.inputs.env }}" >> $GITHUB_ENV
+        echo "TFVARS_FILE=${{ github.event.inputs.app_name }}_${{ github.event.inputs.env }}_${{ github.event.inputs.region }}.tfvars" >> $GITHUB_ENV
 
-    - name: Check if app directory exists and exit if it does
-      id: check_app_dir
+    - name: Check if environment directory exists
       run: |
-        if [ -d "${{ steps.vars.outputs.APP_BASE_DIR }}" ]; then
-          echo "Error: App directory '${{ github.event.inputs.app_name }}' already exists."
+        if [ -d "$APP_DIR" ]; then
+          echo "Error: Environment '${{ github.event.inputs.env }}' already exists for '${{ github.event.inputs.app_name }}'."
           exit 1
         fi
 
     - name: Create environment directory
       run: |
-        mkdir -p ${{ steps.vars.outputs.APP_DIR }}
+        mkdir -p "$APP_DIR"
 
     - name: Copy files based on architecture
       id: copy_files
       run: |
-        ARCH_FILE="${{ steps.vars.outputs.REF_ARCH_FILE }}"
-        RESOURCES_FILE="${{ steps.vars.outputs.RESOURCES_FILE }}"
-        APP_DIR="${{ steps.vars.outputs.APP_DIR }}"
-        EXAMPLE_DIR="${{ steps.vars.outputs.EXAMPLE_DIR }}"
-        ARCHITECTURE="${{ steps.vars.outputs.ARCHITECTURE }}"
+        arch_resources=$(yq -r ".$ARCHITECTURE.resources[]" "$REF_ARCH_FILE")
         FILE_LIST=""
         SELECTED_RESOURCES=""
 
-        if [ -f "$ARCH_FILE" ] && [ -f "$RESOURCES_FILE" ]; then
-          arch_resources=$(yq -r ".$ARCHITECTURE.resources[]" "$ARCH_FILE")
+        for resource in $arch_resources; do
+          filenames=$(yq -r ".$resource.filename[]" "$RESOURCES_FILE" || echo "")
+          for filename in $filenames; do
+            source_file="$EXAMPLE_DIR/$filename"
+            target_file="$APP_DIR/$filename"
+            if [ -f "$source_file" ]; then
+              cp "$source_file" "$target_file"
+              FILE_LIST="$FILE_LIST$filename\n"
+              SELECTED_RESOURCES="$SELECTED_RESOURCES$resource,"
+            fi
+          done
+        done
 
-          if [ -n "$arch_resources" ]; then
-            for resource in $arch_resources; do
-              filenames=$(yq -r ".$resource.filename[]" "$RESOURCES_FILE")
-              if [ -n "$filenames" ]; then
-                for filename in $filenames; do
-                  source_file="$EXAMPLE_DIR/$filename"
-                  target_file="$APP_DIR/$filename"
-                  if [ -f "$source_file" ]; then
-                    FILE_LIST="$FILE_LIST$filename\n"
-                    cp "$source_file" "$target_file"
-                    SELECTED_RESOURCES="$SELECTED_RESOURCES$resource,"
-                  else
-                    echo "Warning: File '$filename' for resource '$resource' not found in example directory."
-                  fi
-                done
-              else
-                echo "Warning: Filenames for resource '$resource' not found in resources.yaml."
-              fi
-            done
-          fi
-
-          terraform_resources=$(yq -r ".terraform.filename[]" "$RESOURCES_FILE")
-          if [ -n "$terraform_resources" ]; then
-            for resource in $terraform_resources; do
-              source_file="$EXAMPLE_DIR/$resource"
-              target_file="$APP_DIR/$resource"
-              if [ -f "$source_file" ]; then
-                cp "$source_file" "$target_file"
-                FILE_LIST="$FILE_LIST$resource\n"
-                SELECTED_RESOURCES="$SELECTED_RESOURCES$resource,"
-              fi
-            done
-          fi
-          echo "Final FILE_LIST: $FILE_LIST"
-          echo "FILE_LIST<<EOF" >> $GITHUB_OUTPUT
-          echo "$FILE_LIST" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-          echo "SELECTED_RESOURCES<<EOF" >> $GITHUB_OUTPUT
-          echo "$SELECTED_RESOURCES" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-        else
-          echo "Architecture or resources definition file not found."
-          exit 1
-        fi
+        echo "FILE_LIST<<EOF" >> $GITHUB_ENV
+        echo "$FILE_LIST" >> $GITHUB_ENV
+        echo "EOF" >> $GITHUB_ENV
+        echo "SELECTED_RESOURCES<<EOF" >> $GITHUB_ENV
+        echo "$SELECTED_RESOURCES" >> $GITHUB_ENV
+        echo "EOF" >> $GITHUB_ENV
 
     - name: Generate tfvars file
       run: |
-        RESOURCES_FILE="${{ steps.vars.outputs.RESOURCES_FILE }}"
-        TFVARS_FILE="${{ steps.vars.outputs.TFVARS_FILE }}"
-        APP_DIR="${{ steps.vars.outputs.APP_DIR }}"
-        SELECTED_RESOURCES="${{ steps.copy_files.outputs.SELECTED_RESOURCES }}"
-        REGION="${{ github.event.inputs.region }}"
-
         echo "Debugging: SELECTED_RESOURCES = [$SELECTED_RESOURCES]" >> "$APP_DIR/debug.log"
-
-        if [ -n "$SELECTED_RESOURCES" ]; then
-          IFS=',' read -ra SELECTED_ARRAY <<< "$SELECTED_RESOURCES"
-          for resource in "${SELECTED_ARRAY[@]}"; do
-            resource=$(echo "$resource" | tr -d ' ')  # Trim spaces
-            echo "Debugging: Processing resource = $resource" >> "$APP_DIR/debug.log"
-            if [[ "$resource" != "terraform" ]]; then
-              variables=$(yq -r ".$resource.variables" "$RESOURCES_FILE")
-              echo "Debugging: yq output for $resource = [$variables]" >> "$APP_DIR/debug.log"
-
-              if [ -n "$variables" ]; then
-                echo "## $resource" >> "$APP_DIR/$TFVARS_FILE"
-                echo "$variables" | while IFS='=' read -r key value; do
-                  if [[ -n "$key" && -n "$value" ]]; then
-                    # Handle multiline string more carefully
-                    if [[ "$value" == *'|'* ]]; then
-                      value=$(echo "$value" | sed 's/^[[:space:]]*|//' | tr -d '\r')
-                      value=$(echo "$value" | sed 's/^[[:space:]]*//') #remove leading spaces
-                      value=$(echo "$value" | sed 's/[[:space:]]*$//') #remove trailing spaces
-                      echo "  $key = $value" >> "$APP_DIR/$TFVARS_FILE"
-                    else
-                      value=$(echo "$value" | sed -e 's/%app_name%/${{ github.event.inputs.app_name }}/g' -e 's/%env%/${{ github.event.inputs.env }}/g' -e 's/%region%/$REGION/g')
-                      echo "  $key = \"$value\"" >> "$APP_DIR/$TFVARS_FILE"
-                    fi
-                  fi
-                done
-                echo "" >> "$APP_DIR/$TFVARS_FILE"
-              fi
+        IFS=',' read -ra SELECTED_ARRAY <<< "$SELECTED_RESOURCES"
+        for resource in "${SELECTED_ARRAY[@]}"; do
+          resource=$(echo "$resource" | tr -d ' ')
+          if [[ "$resource" != "terraform" ]]; then
+            variables=$(yq -r ".$resource.variables | to_entries | map(\"\(.key)=\(.value)\") | .[]" "$RESOURCES_FILE" || echo "")
+            if [ -n "$variables" ]; then
+              echo "## $resource" >> "$APP_DIR/$TFVARS_FILE"
+              echo "$variables" | while IFS='=' read -r key value; do
+                value=$(echo "$value" | sed -e "s/%app_name%/${{ github.event.inputs.app_name }}/g" -e "s/%env%/${{ github.event.inputs.env }}/g" -e "s/%region%/$REGION/g")
+                echo "  $key = \"$value\"" >> "$APP_DIR/$TFVARS_FILE"
+              done
+              echo "" >> "$APP_DIR/$TFVARS_FILE"
             fi
-          done
-        fi
-  
+          fi
+        done
+
     - name: Create and switch to new branch
       run: |
         git config --global user.email "actions@github.com"
         git config --global user.name "GitHub Actions"
-        git checkout -b ${{ steps.vars.outputs.BRANCH_NAME }}
+        git fetch origin
+        if git show-ref --verify --quiet "refs/remotes/origin/$BRANCH_NAME"; then
+          echo "Branch already exists. Skipping push."
+          exit 0
+        fi
+        git checkout -b "$BRANCH_NAME"
 
     - name: Commit and push changes to user branch
       run: |
-        git add ${{ steps.vars.outputs.APP_DIR }}/*
+        git add "$APP_DIR"/*
         git commit -m "Create environment folder ${{ github.event.inputs.app_name }}/${{ github.event.inputs.env }} for ${{ github.event.inputs.architecture }}"
-        git push origin ${{ steps.vars.outputs.BRANCH_NAME }} --force
+        git push origin "$BRANCH_NAME"
 
     - name: Workflow Summary
       run: |
@@ -189,8 +134,8 @@ jobs:
         echo "App Name: ${{ github.event.inputs.app_name }}" >> $GITHUB_STEP_SUMMARY
         echo "Environment: ${{ github.event.inputs.env }}" >> $GITHUB_STEP_SUMMARY
         echo "Architecture: ${{ github.event.inputs.architecture }}" >> $GITHUB_STEP_SUMMARY
-        echo "Created Branch: ${{ steps.vars.outputs.BRANCH_NAME }}" >> $GITHUB_STEP_SUMMARY
+        echo "Created Branch: $BRANCH_NAME" >> $GITHUB_STEP_SUMMARY
         echo "### Created Files:" >> $GITHUB_STEP_SUMMARY
-        echo "```" >> <span class="math-inline">GITHUB\_STEP\_SUMMARY
-        echo "</span>{{ steps.copy_files.outputs.FILE_LIST }}" >> $GITHUB_STEP_SUMMARY
-        echo "```" >> $GITHUB_
+        echo "```" >> $GITHUB_STEP_SUMMARY
+        echo "$FILE_LIST" >> $GITHUB_STEP_SUMMARY
+        echo "```" >> $GITHUB_STEP_SUMMARY
